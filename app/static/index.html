@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Liver MRI Segmentation Studio</title>
+    <link rel="stylesheet" href="/styles.css?v=3" />
+  </head>
+  <body>
+    <div id="demoShell" class="app-shell">
+      <aside class="sidebar left">
+        <div class="panel brand-panel">
+          <p class="eyebrow">Teaching Studio</p>
+          <h1>Liver MRI Segmentation</h1>
+          <p class="muted">
+            Browse cases, explore anatomy with the GT overlay, and draw a closed liver contour for instant feedback.
+          </p>
+          <button id="enterSegmentationBtn" class="accent mode-entry">Enter Segmentation Mode</button>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Case Browser</h2>
+            <span id="datasetSummary" class="chip">Loading</span>
+          </div>
+          <label class="field">
+            <span>Patient</span>
+            <select id="patientSelect"></select>
+          </label>
+          <label class="field">
+            <span>Sequence</span>
+            <select id="sequenceSelect"></select>
+          </label>
+          <label class="field">
+            <span>Organ</span>
+            <select id="organSelect"></select>
+          </label>
+          <div class="stat-grid">
+            <div class="stat-card">
+              <span class="stat-label">Slices</span>
+              <strong id="sliceCount">-</strong>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Current</span>
+              <strong id="sliceBadge">-</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Slice Navigation</h2>
+            <span class="chip">Arrow Keys</span>
+          </div>
+          <input id="sliceSlider" type="range" min="0" max="0" value="0" />
+          <div class="row split">
+            <button id="prevSliceBtn" class="secondary">Previous</button>
+            <button id="nextSliceBtn" class="secondary">Next</button>
+          </div>
+          <div class="meta-list">
+            <div><span>Spacing</span><strong id="spacingText">-</strong></div>
+            <div><span>Thickness</span><strong id="thicknessText">-</strong></div>
+            <div><span>Slice ID</span><strong id="sliceLabel">-</strong></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Teaching Mode</h2>
+            <span class="chip cyan">GT</span>
+          </div>
+          <label class="toggle">
+            <input id="showGtToggle" type="checkbox" />
+            <span>Show ground-truth region overlay</span>
+          </label>
+          <label class="toggle">
+            <input id="showContourToggle" type="checkbox" />
+            <span>Show GT contour landmarks</span>
+          </label>
+          <div id="teachingText" class="note-box">
+            The liver annotation will appear here once a slice is loaded.
+          </div>
+        </div>
+      </aside>
+
+      <main class="viewer-column">
+        <div class="topbar">
+          <div>
+            <p class="eyebrow">Interactive Canvas</p>
+            <h2>Manual Segmentation Workspace</h2>
+          </div>
+          <div class="toolbar">
+            <div id="imageModeGroup" class="segmented" aria-label="2D image mode">
+              <button class="active" data-image-mode="anatomy">Image</button>
+              <button data-image-mode="water">Water Only</button>
+              <button data-image-mode="fat">Fat Only</button>
+              <button data-image-mode="pdff">PDFF</button>
+            </div>
+            <button id="viewModeBtn" class="ghost">3D Mode</button>
+            <button id="triViewBtn" class="ghost">Tri-View</button>
+            <button id="fitBtn" class="ghost">Fit View</button>
+          </div>
+        </div>
+
+        <div class="canvas-panel panel">
+          <canvas id="sliceCanvas" width="960" height="720"></canvas>
+          <canvas id="volumeCanvas" class="hidden" width="960" height="720"></canvas>
+          <div id="triViewPanel" class="tri-view-panel hidden" aria-label="Orthogonal MRI views">
+            <div id="triViewOverview" class="tri-view-overview">
+              <button class="tri-view-card" data-tri-view="axial">
+                <div class="tri-view-heading">
+                  <strong id="axialTitle">Axial</strong>
+                  <span id="axialMeta">-</span>
+                </div>
+                <img id="axialImage" alt="Axial MRI view" />
+              </button>
+              <button class="tri-view-card" data-tri-view="coronal">
+                <div class="tri-view-heading">
+                  <strong id="coronalTitle">Coronal</strong>
+                  <span id="coronalMeta">-</span>
+                </div>
+                <img id="coronalImage" alt="Coronal MRI view" />
+              </button>
+              <button class="tri-view-card" data-tri-view="sagittal">
+                <div class="tri-view-heading">
+                  <strong id="sagittalTitle">Sagittal</strong>
+                  <span id="sagittalMeta">-</span>
+                </div>
+                <img id="sagittalImage" alt="Sagittal MRI view" />
+              </button>
+            </div>
+            <div id="triViewDetail" class="tri-view-detail hidden">
+              <div class="tri-view-main">
+                <div class="tri-view-heading">
+                  <strong id="triDetailTitle">Axial</strong>
+                  <span id="triDetailMeta">-</span>
+                </div>
+                <img id="triDetailImage" alt="Selected orthogonal MRI view" />
+                <input id="triDetailSlider" class="tri-view-slider" type="range" min="0" max="0" value="0" aria-label="Selected view slice" />
+              </div>
+              <div class="tri-view-explainer">
+                <button id="triBackBtn" class="secondary">Back to Views</button>
+                <div id="triDirectionFigure" class="direction-figure" aria-label="View direction diagram"></div>
+                <h3 id="triExplainTitle">Axial View</h3>
+                <p id="triExplainText">This plane is viewed from inferior to superior, like looking from the feet toward the head.</p>
+              </div>
+            </div>
+          </div>
+          <div id="volumePdffBadge" class="volume-pdff-badge hidden">
+            <span>Whole Liver Median PDFF</span>
+            <strong id="volumePdffMedian">--</strong>
+          </div>
+          <div id="pdffColorbar" class="pdff-colorbar hidden">
+            <div class="pdff-colorbar-title">PDFF (%)</div>
+            <div class="pdff-colorbar-scale"></div>
+            <div class="pdff-colorbar-labels">
+              <span>0</span>
+              <span>25</span>
+              <span>50+</span>
+            </div>
+          </div>
+          <div id="scaleBar" class="scale-bar hidden">
+            <div id="scaleBarLine" class="scale-bar-line"></div>
+            <div id="scaleBarLabel" class="scale-bar-label">-- mm</div>
+          </div>
+          <div class="canvas-overlay">
+            <div id="canvasLegend" class="legend">
+              <span><i class="swatch teal"></i>GT</span>
+              <span><i class="swatch heat"></i>Approx. PDFF</span>
+              <span><i class="swatch amber"></i>Your contour</span>
+              <span><i class="swatch green"></i>Overlap</span>
+              <span><i class="swatch red"></i>Missed area</span>
+            </div>
+            <div id="canvasHelp" class="help-pill">Left click adds contour points. Mouse wheel zooms around the image center. Right drag pans the image.</div>
+          </div>
+        </div>
+
+        <div class="panel controls-panel">
+          <div class="section-title">
+            <h2>Drawing Controls</h2>
+            <span class="chip amber">Contour</span>
+          </div>
+          <div class="button-grid">
+            <button id="undoBtn" class="secondary">Undo Point</button>
+            <button id="resetBtn" class="secondary">Reset</button>
+            <button id="closeBtn">Close Contour</button>
+            <button id="evaluateBtn" class="accent">Evaluate</button>
+          </div>
+          <div class="shortcuts">
+            <span>`Z` Undo</span>
+            <span>`R` Reset</span>
+            <span>`C` Close</span>
+            <span>`Enter` Evaluate</span>
+            <span>`G` Toggle GT</span>
+          </div>
+        </div>
+      </main>
+
+      <aside class="sidebar right">
+        <div class="panel score-panel">
+          <div class="section-title">
+            <h2>Evaluation</h2>
+            <span id="statusBadge" class="chip">Waiting</span>
+          </div>
+          <div class="score-ring">
+            <div>
+              <span class="score-label">Dice</span>
+              <strong id="diceValue">--</strong>
+            </div>
+          </div>
+          <div class="metric-list">
+            <div><span>IoU</span><strong id="iouValue">--</strong></div>
+            <div><span>Your Area (px)</span><strong id="studentArea">--</strong></div>
+            <div><span>GT Area (px)</span><strong id="gtArea">--</strong></div>
+          </div>
+          <div id="statusText" class="note-box warm">
+            Draw a contour and close it before starting the evaluation.
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2 id="pdffLabel">Approx. PDFF (%)</h2>
+            <span class="chip heat">Fat Map</span>
+          </div>
+          <div class="metric-list">
+            <div>
+              <span class="metric-heading">
+                <span>GT</span>
+                <select id="gtPdffMeanMode" class="metric-select" aria-label="GT PDFF mean mode">
+                  <option value="mean">Mean</option>
+                  <option value="trimmedMean">Trimmed mean</option>
+                </select>
+              </span>
+              <strong id="gtPdffMean">--</strong>
+            </div>
+            <div><span>GT Median</span><strong id="gtPdffMedian">--</strong></div>
+            <div><span>Your Mean</span><strong id="userPdffMean">--</strong></div>
+            <div><span>Your Median</span><strong id="userPdffMedian">--</strong></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="section-title">
+            <h2>Interpretation Guide</h2>
+          </div>
+          <div class="note-box">
+            Green means agreement with the expert label. Amber marks excess drawing, and red shows liver tissue that was missed.
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <div id="segmentationShell" class="segmentation-shell hidden">
+      <div class="seg-topbar panel">
+        <div>
+          <p class="eyebrow">Student Segmentation Mode</p>
+          <h1>10-Slice Liver Segmentation Challenge</h1>
+        </div>
+        <div class="toolbar">
+          <button id="backToDemoBtn" class="secondary">Demo Mode</button>
+        </div>
+      </div>
+
+      <section id="segStartPanel" class="panel seg-start-panel">
+        <div class="section-title">
+          <h2>Start Challenge</h2>
+          <span class="chip amber">Liver</span>
+        </div>
+        <label class="field">
+          <span>Patient</span>
+          <select id="segPatientSelect"></select>
+        </label>
+        <button id="startSegSessionBtn" class="accent">Randomly Select 10 Slices</button>
+        <div id="segStartStatus" class="note-box warm">Choose a patient to begin.</div>
+      </section>
+
+      <section id="segWorkspace" class="hidden">
+        <div class="panel seg-progress-panel">
+          <div class="section-title">
+            <h2>Slice Progress</h2>
+            <button id="finishSegBtn" class="accent" disabled>Finish</button>
+          </div>
+          <div class="seg-completion">
+            <div class="seg-completion-track"><div id="segCompletionFill" class="seg-completion-fill"></div></div>
+            <strong id="segCompletionText">0%</strong>
+          </div>
+          <div id="segProgressStrip" class="seg-progress-strip"></div>
+          <input id="segSliceQuickSlider" class="seg-slice-slider" type="range" min="0" max="9" value="0" />
+        </div>
+
+        <div class="seg-layout">
+          <main class="viewer-column">
+            <div class="topbar">
+              <div>
+                <p class="eyebrow">Practice Canvas</p>
+                <h2 id="segSliceTitle">Slice -</h2>
+              </div>
+            </div>
+            <div class="canvas-panel panel">
+              <canvas id="segCanvas" width="960" height="720"></canvas>
+              <div class="canvas-overlay">
+                <div class="legend">
+                  <span><i class="swatch amber"></i>Your contour</span>
+                </div>
+                <div class="help-pill">Left click adds contour points. Right drag pans. Mouse wheel zooms.</div>
+              </div>
+            </div>
+          </main>
+
+          <aside class="sidebar right">
+            <div class="panel controls-panel">
+              <div class="section-title">
+                <h2>Segmentation Controls</h2>
+                <span id="segStatusBadge" class="chip">Not saved</span>
+              </div>
+              <div class="button-grid">
+                <button id="segPrevBtn" class="secondary">Previous</button>
+                <button id="segNextBtn" class="secondary">Next</button>
+                <button id="segUndoBtn" class="secondary">Undo Point</button>
+                <button id="segRedoBtn" class="secondary">Redo</button>
+                <button id="segCloseBtn">Close Contour</button>
+                <button id="segSaveBtn" class="accent">Save Mask</button>
+              </div>
+              <div id="segStatusText" class="note-box warm">Draw a closed contour, then save the mask.</div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section id="segEvaluation" class="hidden">
+        <div class="panel">
+          <div class="section-title">
+            <h2>Evaluation Summary</h2>
+            <span id="segScoreBadge" class="chip green">Score --</span>
+          </div>
+          <div id="segEvalStrip" class="seg-progress-strip"></div>
+          <input id="segEvalSliceSlider" class="seg-slice-slider eval-slice-slider" type="range" min="0" max="9" value="0" />
+        </div>
+        <div class="seg-layout seg-eval-layout">
+          <main class="viewer-column">
+            <div class="topbar">
+              <div>
+                <p class="eyebrow">2D Evaluation</p>
+                <h2 id="segEvalTitle">Slice -</h2>
+              </div>
+              <div class="toolbar">
+                <button id="segEval2dBtn" class="secondary">2D Models</button>
+                <button id="segEval3dBtn" class="secondary">3D Models</button>
+              </div>
+            </div>
+            <div id="segEval2dPanel" class="canvas-panel panel seg-eval-2d-panel">
+              <canvas id="segEvalCanvas" width="960" height="720"></canvas>
+              <div class="canvas-overlay">
+                <div class="legend">
+                  <span><i class="swatch green"></i>Overlap</span>
+                  <span><i class="swatch amber"></i>Excess</span>
+                  <span><i class="swatch red"></i>Missed</span>
+                </div>
+              </div>
+            </div>
+            <div id="segEval3dPanel" class="panel hidden">
+              <div class="paired-volume">
+                <div class="paired-volume-card">
+                  <h3>Your 3D Mask</h3>
+                  <div class="model-pdff-badge">
+                    <span>Median PDFF</span>
+                    <strong id="segStudentVolumePdff">--</strong>
+                  </div>
+                  <canvas id="segStudentVolumeCanvas" width="460" height="520"></canvas>
+                </div>
+                <div class="paired-volume-card">
+                  <h3>GT 3D Mask</h3>
+                  <div class="model-pdff-badge">
+                    <span>Median PDFF</span>
+                    <strong id="segGtVolumePdff">--</strong>
+                  </div>
+                  <canvas id="segGtVolumeCanvas" width="460" height="520"></canvas>
+                </div>
+              </div>
+            </div>
+          </main>
+          <aside class="sidebar right">
+            <div class="panel seg-eval-metrics-panel">
+              <div class="metric-list seg-eval-metric-list">
+                <div><span>Dice</span><strong id="segEvalDice">--</strong></div>
+                <div><span>IoU</span><strong id="segEvalIou">--</strong></div>
+                <div><span>Your PDFF Median</span><strong id="segEvalUserPdff">--</strong></div>
+                <div><span>GT PDFF Median</span><strong id="segEvalGtPdff">--</strong></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </div>
+
+    <script src="/app.js?v=3"></script>
+  </body>
+</html>

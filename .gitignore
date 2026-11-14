@@ -1,0 +1,35 @@
+# Editor and IDE files
+.vscode/
+.idea/
+
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local outputs and generated files
+outputs/
+*.log
+
+# OS metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Large or restricted datasets
+data/CHAOS_Train_Sets/
+*.zip
+
+# Packaging/build artifacts
+build/
+dist/
+*.egg-info/
